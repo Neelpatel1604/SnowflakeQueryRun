@@ -1,0 +1,2 @@
+Query_Name,Query_ID,Start_Time,End_Time,Runtime_Seconds,Elapsed_Time_Seconds,MB_Scanned,Rows_Produced,Credits_Used,Query
+simple_select,01badaf7-3202-d121-0000-000602a26051,2025-03-07 15:07:07.197253,2025-03-07 15:07:07.284271,0.08701801300048828,0.060000,0E-12,10,0.000009000,SELECT * FROM CUSTOMER LIMIT 10
