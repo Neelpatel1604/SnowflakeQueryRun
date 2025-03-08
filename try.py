@@ -80,21 +80,19 @@ def run_query_and_save_metrics(query_name, query_sql, metrics_file, results_file
 
         # Record start time
         start_time = time.time()
-        start_timestamp = datetime.now()
 
-        # Execute query
+        # Execute query and record end time
         cursor.execute(query_sql)
+        end_time = time.time()
+        runtime_seconds = end_time - start_time
+        
         results = cursor.fetchall()
         query_id = cursor.sfqid
         
         # Get column names
         column_names = [desc[0] for desc in cursor.description]
 
-        # Record end time
-        end_time = time.time()
-        end_timestamp = datetime.now()
-        runtime_seconds = end_time - start_time
-
+   
         # Get query performance metrics
         cursor.execute(f"""
             SELECT 
@@ -117,7 +115,6 @@ def run_query_and_save_metrics(query_name, query_sql, metrics_file, results_file
 
         # Add query metadata columns
         results_df['Query_Name'] = query_name
-        results_df['Query_Timestamp'] = start_timestamp
 
         # Append or create results file
         if os.path.exists(results_file):
@@ -129,8 +126,6 @@ def run_query_and_save_metrics(query_name, query_sql, metrics_file, results_file
         metrics_data = {
             'Query_Name': query_name,
             'Query_ID': query_id,
-            'Start_Time': start_timestamp,
-            'End_Time': end_timestamp,
             'Runtime_Seconds': runtime_seconds,
             'Elapsed_Time_Seconds': metrics[1] if metrics else None,
             'MB_Scanned': metrics[2] if metrics else None,
