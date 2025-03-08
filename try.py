@@ -84,7 +84,7 @@ def run_query_and_save_metrics(query_name, query_sql, metrics_file, results_file
         # Execute query and record end time
         cursor.execute(query_sql)
         end_time = time.time()
-        runtime_seconds = end_time - start_time
+        runtime_ms = (end_time - start_time) * 1000  # Time in milliseconds
         
         results = cursor.fetchall()
         query_id = cursor.sfqid
@@ -92,12 +92,11 @@ def run_query_and_save_metrics(query_name, query_sql, metrics_file, results_file
         # Get column names
         column_names = [desc[0] for desc in cursor.description]
 
-   
         # Get query performance metrics
         cursor.execute(f"""
             SELECT 
                 QUERY_ID,
-                TOTAL_ELAPSED_TIME/1000 as ELAPSED_TIME_SECONDS,
+                TOTAL_ELAPSED_TIME as ELAPSED_TIME_MS,  -- Keep in milliseconds
                 BYTES_SCANNED/1024/1024 as MB_SCANNED,
                 ROWS_PRODUCED,
                 CREDITS_USED_CLOUD_SERVICES
@@ -112,22 +111,16 @@ def run_query_and_save_metrics(query_name, query_sql, metrics_file, results_file
 
         # Save query results
         results_df = pd.DataFrame(results, columns=column_names)
-
-        # Add query metadata columns
         results_df['Query_Name'] = query_name
+        # Save to a query-specific file, overwriting each time
+        results_df.to_csv(results_file, index=False)
 
-        # Append or create results file
-        if os.path.exists(results_file):
-            results_df.to_csv(results_file, mode='a', header=False, index=False)
-        else:
-            results_df.to_csv(results_file, index=False)
-
-        # Prepare metrics data
+        # Prepare metrics data with times in milliseconds
         metrics_data = {
             'Query_Name': query_name,
             'Query_ID': query_id,
-            'Runtime_Seconds': runtime_seconds,
-            'Elapsed_Time_Seconds': metrics[1] if metrics else None,
+            'Runtime_MS': runtime_ms,  # Store runtime in milliseconds
+            'Elapsed_Time_MS': metrics[1] if metrics else None,  # Store elapsed time in milliseconds
             'MB_Scanned': metrics[2] if metrics else None,
             'Rows_Produced': metrics[3] if metrics else None,
             'Credits_Used': metrics[4] if metrics else None,
@@ -142,12 +135,13 @@ def run_query_and_save_metrics(query_name, query_sql, metrics_file, results_file
                 writer.writeheader()
             writer.writerow(metrics_data)
 
-        # Print summary
+        # Print summary with times in milliseconds
         print(f"\nQuery execution completed:")
-        print(f"Results appended to: {results_file}")
+        print(f"Results saved to: {results_file}")
         print(f"Metrics appended to: {metrics_file}")
         print(f"\nPerformance Summary:")
-        print(f"Runtime: {runtime_seconds:.2f} seconds")
+        print(f"Runtime: {runtime_ms:.2f} milliseconds")
+        print(f"Elapsed Time: {metrics[1]:.2f} milliseconds" if metrics else "Elapsed Time: N/A")
         print(f"Rows produced: {metrics[3] if metrics else 'N/A'}")
         print(f"Data scanned: {metrics[2]:.2f} MB" if metrics else "Data scanned: N/A")
         print(f"Credits used: {metrics[4]}" if metrics else "Credits used: N/A")
@@ -175,17 +169,16 @@ def main():
     output_dir = 'query_results'
     os.makedirs(output_dir, exist_ok=True)
 
-    # Use fixed filenames for consistent storage
+    # Use fixed filename for metrics
     metrics_file = f'{output_dir}/query_metrics.csv'
-    results_file = f'{output_dir}/query_results.csv'
 
-    # Execute each query from the queries list
+    # Execute each query with a unique results file
     for query_name, query_sql in queries:
+        results_file = f'{output_dir}/{query_name}_results.csv'
         run_query_and_save_metrics(query_name, query_sql, metrics_file, results_file)
 
     print(f"\nAll queries completed.")
-    print(f"Combined results saved to: {results_file}")
-    print(f"Combined metrics saved to: {metrics_file}")
+    print(f"Metrics saved to: {metrics_file}")
 
 if __name__ == "__main__":
     main()
