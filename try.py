@@ -5,20 +5,65 @@ from datetime import datetime
 import csv
 import os
 from dotenv import load_dotenv
-from queries import QUERIES
+from queries import queries
+
+def check_env_variables():
+    """Check if all required environment variables are set"""
+    required_vars = [
+        'USER_NAME',
+        'USER_PASSWORD',
+        'USER_ACCOUNT',
+        'USER_WAREHOUSE',
+        'USER_DATABASE',
+        'USER_SCHEMA'
+    ]
+    
+    missing_vars = []
+    for var in required_vars:
+        if not os.getenv(var):
+            missing_vars.append(var)
+    
+    if missing_vars:
+        raise ValueError(f"Missing required environment variables: {', '.join(missing_vars)}")
+
+def list_schemas_and_tables(cursor):
+    """List available schemas and tables"""
+    print("\nAvailable Schemas:")
+    cursor.execute("SHOW SCHEMAS")
+    schemas = cursor.fetchall()
+    for schema in schemas:
+        print(f"- {schema[1]}")
+
+    print(f"\nTables in {os.getenv('USER_SCHEMA')}:")
+    cursor.execute(f"SHOW TABLES IN SCHEMA {os.getenv('USER_DATABASE')}.{os.getenv('USER_SCHEMA')}")
+    tables = cursor.fetchall()
+    for table in tables:
+        print(f"- {table[1]}")
 
 def run_query_and_save_metrics(query_name, query_sql, metrics_file, results_file):
     """
     Run a single query and save its results and performance metrics
     """
+    conn = None
+    cursor = None
     try:
         # Load environment variables
         load_dotenv()
-
+        
+        # Validate environment variables
+        check_env_variables()
+        
         # Connect to Snowflake
         print(f"\nExecuting query: {query_name}")
         print("Connecting to Snowflake...")
-
+        
+        # Print connection details (without password)
+        print(f"Account: {os.getenv('USER_ACCOUNT')}")
+        print(f"User: {os.getenv('USER_NAME')}")
+        print(f"Database: {os.getenv('USER_DATABASE')}")
+        print(f"Schema: {os.getenv('USER_SCHEMA')}")
+        print(f"Warehouse: {os.getenv('USER_WAREHOUSE')}")
+        
         conn = snowflake.connector.connect(
             user=os.getenv('USER_NAME'),
             password=os.getenv('USER_PASSWORD'),
@@ -30,6 +75,9 @@ def run_query_and_save_metrics(query_name, query_sql, metrics_file, results_file
 
         cursor = conn.cursor()
 
+        # List available schemas and tables
+        list_schemas_and_tables(cursor)
+
         # Record start time
         start_time = time.time()
         start_timestamp = datetime.now()
@@ -38,7 +86,7 @@ def run_query_and_save_metrics(query_name, query_sql, metrics_file, results_file
         cursor.execute(query_sql)
         results = cursor.fetchall()
         query_id = cursor.sfqid
-
+        
         # Get column names
         column_names = [desc[0] for desc in cursor.description]
 
@@ -109,15 +157,22 @@ def run_query_and_save_metrics(query_name, query_sql, metrics_file, results_file
         print(f"Data scanned: {metrics[2]:.2f} MB" if metrics else "Data scanned: N/A")
         print(f"Credits used: {metrics[4]}" if metrics else "Credits used: N/A")
 
+    except ValueError as e:
+        print(f"\nEnvironment Error for query {query_name}:")
+        print(f"Error Message: {str(e)}")
+    except snowflake.connector.errors.ProgrammingError as e:
+        print(f"\nSnowflake Error for query {query_name}:")
+        print(f"Error Code: {e.errno}")
+        print(f"Error Message: {str(e)}")
     except Exception as e:
         print(f"\nError executing query {query_name}:")
         print(f"Error Type: {type(e).__name__}")
         print(f"Error Message: {str(e)}")
 
     finally:
-        if 'cursor' in locals():
+        if cursor:
             cursor.close()
-        if 'conn' in locals():
+        if conn:
             conn.close()
 
 def main():
@@ -129,8 +184,8 @@ def main():
     metrics_file = f'{output_dir}/query_metrics.csv'
     results_file = f'{output_dir}/query_results.csv'
 
-    # Execute each query from the queries file
-    for query_name, query_sql in QUERIES.items():
+    # Execute each query from the queries list
+    for query_name, query_sql in queries:
         run_query_and_save_metrics(query_name, query_sql, metrics_file, results_file)
 
     print(f"\nAll queries completed.")
