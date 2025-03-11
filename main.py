@@ -1,7 +1,5 @@
 import snowflake.connector
-import pandas as pd
 import time
-from datetime import datetime
 import csv
 import os
 from dotenv import load_dotenv
@@ -26,19 +24,19 @@ def check_env_variables():
     if missing_vars:
         raise ValueError(f"Missing required environment variables: {', '.join(missing_vars)}")
 
-def list_schemas_and_tables(cursor):
-    """List available schemas and tables"""
-    print("\nAvailable Schemas:")
-    cursor.execute("SHOW SCHEMAS")
-    schemas = cursor.fetchall()
-    for schema in schemas:
-        print(f"- {schema[1]}")
+# def list_schemas_and_tables(cursor):
+#     """List available schemas and tables"""
+#     # print("\nAvailable Schemas:")
+#     # cursor.execute("SHOW SCHEMAS")
+#     # schemas = cursor.fetchall()
+#     # for schema in schemas:
+#     #     print(f"- {schema[1]}")
 
-    print(f"\nTables in {os.getenv('USER_SCHEMA')}:")
-    cursor.execute(f"SHOW TABLES IN SCHEMA {os.getenv('USER_DATABASE')}.{os.getenv('USER_SCHEMA')}")
-    tables = cursor.fetchall()
-    for table in tables:
-        print(f"- {table[1]}")
+#     # print(f"\nTables in {os.getenv('USER_SCHEMA')}:")
+#     cursor.execute(f"SHOW TABLES IN SCHEMA {os.getenv('USER_DATABASE')}.{os.getenv('USER_SCHEMA')}")
+#     # tables = cursor.fetchall()
+#     # for table in tables:
+#     #     print(f"- {table[1]}")
 
 def run_query_and_save_metrics(query_name, query_sql, metrics_file, results_file):
     """
@@ -58,11 +56,11 @@ def run_query_and_save_metrics(query_name, query_sql, metrics_file, results_file
         print("Connecting to Snowflake...")
         
         # Print connection details (without password)
-        print(f"Account: {os.getenv('USER_ACCOUNT')}")
-        print(f"User: {os.getenv('USER_NAME')}")
-        print(f"Database: {os.getenv('USER_DATABASE')}")
-        print(f"Schema: {os.getenv('USER_SCHEMA')}")
-        print(f"Warehouse: {os.getenv('USER_WAREHOUSE')}")
+        # print(f"Account: {os.getenv('USER_ACCOUNT')}")
+        # print(f"User: {os.getenv('USER_NAME')}")
+        # print(f"Database: {os.getenv('USER_DATABASE')}")
+        # print(f"Schema: {os.getenv('USER_SCHEMA')}")
+        # print(f"Warehouse: {os.getenv('USER_WAREHOUSE')}")
         
         conn = snowflake.connector.connect(
             user=os.getenv('USER_NAME'),
@@ -76,21 +74,25 @@ def run_query_and_save_metrics(query_name, query_sql, metrics_file, results_file
         cursor = conn.cursor()
 
         # List available schemas and tables
-        list_schemas_and_tables(cursor)
+        # list_schemas_and_tables(cursor)
 
         # Record start time
-        start_time = time.time()
+        
+        # # Disable query caching
+        cursor.execute("ALTER SESSION SET USE_CACHED_RESULT = FALSE")
 
-        # Execute query and record end time
+        # Set a unique query tag
+        # cursor.execute(f"ALTER SESSION SET QUERY_TAG = 'RUN_{int(time.time())}'")
+        # Execute query
+        start_time = time.time()
         cursor.execute(query_sql)
         end_time = time.time()
         runtime_ms = (end_time - start_time) * 1000  # Time in milliseconds
-        
-        results = cursor.fetchall()
+        # 
         query_id = cursor.sfqid
         
         # Get column names
-        column_names = [desc[0] for desc in cursor.description]
+        # column_names = [desc[0] for desc in cursor.description]
 
         # Get query performance metrics
         cursor.execute(f"""
@@ -109,21 +111,17 @@ def run_query_and_save_metrics(query_name, query_sql, metrics_file, results_file
         output_dir = 'query_results'
         os.makedirs(output_dir, exist_ok=True)
 
-        # Save query results
-        results_df = pd.DataFrame(results, columns=column_names)
-        results_df['Query_Name'] = query_name
-        # Save to a query-specific file, overwriting each time
-        results_df.to_csv(results_file, index=False)
+
 
         # Prepare metrics data with times in milliseconds
         metrics_data = {
             'Query_Name': query_name,
-            'Query_ID': query_id,
-            'Runtime_MS': runtime_ms,  # Store runtime in milliseconds
-            'Elapsed_Time_MS': metrics[1] if metrics else None,  # Store elapsed time in milliseconds
+            'Time_mesaured_by_us': runtime_ms,  # Store runtime in milliseconds
+            'Snowflakes_Time': metrics[1] if metrics else None,  # Store elapsed time in milliseconds
             'MB_Scanned': metrics[2] if metrics else None,
             'Rows_Produced': metrics[3] if metrics else None,
             'Credits_Used': metrics[4] if metrics else None,
+            'Query_ID': query_id,
             'Query': query_sql.replace('\n', ' ').strip()
         }
 
@@ -139,12 +137,12 @@ def run_query_and_save_metrics(query_name, query_sql, metrics_file, results_file
         print(f"\nQuery execution completed:")
         print(f"Results saved to: {results_file}")
         print(f"Metrics appended to: {metrics_file}")
-        print(f"\nPerformance Summary:")
-        print(f"Runtime: {runtime_ms:.2f} milliseconds")
-        print(f"Elapsed Time: {metrics[1]:.2f} milliseconds" if metrics else "Elapsed Time: N/A")
-        print(f"Rows produced: {metrics[3] if metrics else 'N/A'}")
-        print(f"Data scanned: {metrics[2]:.2f} MB" if metrics else "Data scanned: N/A")
-        print(f"Credits used: {metrics[4]}" if metrics else "Credits used: N/A")
+        # print(f"\nPerformance Summary:")
+        # print(f"Runtime: {runtime_ms:.2f} milliseconds")
+        # print(f"Elapsed Time: {metrics[1]:.2f} milliseconds" if metrics else "Elapsed Time: N/A")
+        # print(f"Rows produced: {metrics[3] if metrics else 'N/A'}")
+        # print(f"Data scanned: {metrics[2]:.2f} MB" if metrics else "Data scanned: N/A")
+        # print(f"Credits used: {metrics[4]}" if metrics else "Credits used: N/A")
 
     except ValueError as e:
         print(f"\nEnvironment Error for query {query_name}:")
